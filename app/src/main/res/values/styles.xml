@@ -1,0 +1,20 @@
+<resources>
+    <style name="Theme.PromoBlocker" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#236653</item>
+    </style>
+
+    <color name="launch_background">#0D0D0D</color>
+
+    <style name="Theme.PromoBlocker.LaunchBase" parent="Theme.PromoBlocker">
+        <item name="android:statusBarColor">@color/launch_background</item>
+        <item name="android:navigationBarColor">@color/launch_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <style name="Theme.PromoBlocker.Launch" parent="Theme.PromoBlocker.LaunchBase">
+        <item name="android:windowBackground">@drawable/hush_launch_background</item>
+    </style>
+</resources>
