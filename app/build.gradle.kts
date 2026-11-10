@@ -11,8 +11,8 @@ android {
         applicationId = "com.vertos.promoblocker"
         minSdk = 29
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.5.0"
+        versionCode = 13
+        versionName = "1.5.1"
     }
     buildFeatures { compose = true }
     compileOptions {

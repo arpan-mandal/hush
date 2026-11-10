@@ -31,11 +31,13 @@ class BlockerScreenTest {
         roleHeld: Boolean = true,
         initialTheme: AppThemeMode = AppThemeMode.LIGHT,
         extraRules: List<RegexRuleEntity> = emptyList(),
+        feedbackInitiallyEnabled: Boolean = true,
         onRoleRequest: () -> Unit = {},
     ) {
         compose.setContent {
             hostView = LocalView.current
             var theme by remember { mutableStateOf(initialTheme) }
+            var feedbackEnabled by remember { mutableStateOf(feedbackInitiallyEnabled) }
             val settings = ScreeningSettings()
             val fixtureRules = DefaultRules.rules.map {
                 RegexRuleEntity(it.id, it.expression, builtIn = true, transactional = it.transactional)
@@ -50,6 +52,7 @@ class BlockerScreenTest {
                     addRule = { RuleValidator.validate(it) }, toggleRule = { _, _ -> },
                     deleteRule = {}, clearHistory = {},
                     testNumber = { NumberEvaluator.evaluate(it, false, ScreeningSnapshot(settings)) },
+                    enableFeedback = if (feedbackEnabled) null else ({ feedbackEnabled = true }),
                 ), remember { SnackbarHostState() })
             }
         }
@@ -66,11 +69,10 @@ class BlockerScreenTest {
     }
     @Test
     @Config(qualifiers = "w360dp-h640dp-mdpi")
-    fun themeDropdownKeepsDonationVisibleAndScreeningPreferencesLiveInRules() {
+    fun themeDropdownAndScreeningPreferencesLiveInTheirOwnTabs() {
         showScreen()
         compose.onNodeWithText("Call blocking is on").assertIsDisplayed()
         compose.onNodeWithText("Settings", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("Donate").assertIsDisplayed()
         compose.onNodeWithText("What to block").assertDoesNotExist()
         compose.onNodeWithText("Dark").assertDoesNotExist()
         compose.onNodeWithText("Pure black").assertDoesNotExist()
@@ -83,7 +85,6 @@ class BlockerScreenTest {
         compose.onNodeWithText("Dark").performClick()
         compose.onNodeWithText("Pure black").performClick()
         compose.onNodeWithText("Pure black").assertIsDisplayed()
-        compose.onNodeWithText("Donate").assertIsDisplayed()
         capture("settings-compact")
         compose.onNodeWithText("Home", useUnmergedTree = true).performClick()
         capture("home-compact-oled")
@@ -95,6 +96,28 @@ class BlockerScreenTest {
         compose.onNodeWithText("Pure black").performClick()
         compose.onNode(hasText("Pure black") and isSelected()).assertIsDisplayed()
         compose.onNodeWithText("Light").performClick().assertIsDisplayed()
+    }
+    @Test fun feedbackMovesFromHomeToSettingsAfterPermissionIsGranted() {
+        showScreen(feedbackInitiallyEnabled = false)
+        val page = compose.onNode(hasScrollAction())
+        val feedback = compose.onNodeWithText("After-call feedback")
+
+        compose.onNodeWithText("Settings", useUnmergedTree = true).performClick()
+        page.performScrollToNode(hasText("Donate"))
+        feedback.assertDoesNotExist()
+        compose.onNodeWithText("Home", useUnmergedTree = true).performClick()
+        page.performScrollToNode(hasText("Allow call feedback"))
+        compose.onNodeWithText("Allow call feedback").performClick()
+        feedback.assertDoesNotExist()
+
+        compose.onNodeWithText("Settings", useUnmergedTree = true).performClick()
+        page.performScrollToIndex(0)
+        page.performScrollToNode(hasText("After-call feedback"))
+        feedback.assertIsDisplayed()
+        compose.onNodeWithText("Allow call feedback").assertDoesNotExist()
+        page.performScrollToNode(hasText("Donate"))
+        val donate = compose.onNodeWithText("Donate").assertIsDisplayed()
+        assertTrue(donate.getUnclippedBoundsInRoot().top > feedback.getUnclippedBoundsInRoot().top)
     }
     @Test fun displayRulesOpensASeparateTableWithoutBuiltInRules() {
         showScreen(extraRules = listOf(

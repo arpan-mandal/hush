@@ -24,7 +24,7 @@ Flagged numbers rely on a result from your phone company, which Android provides
 
 ## After-call feedback
 
-Turn on **After-call feedback** in Settings and allow phone-state access and notifications. After an answered incoming call from an unsaved number that Android passes to Hush, Hush can post a silent question. It skips calls it blocked and calls it cannot reliably track.
+Turn on **After-call feedback** on Home and allow phone-state access and notifications. Once enabled, the card moves to Settings. After an answered incoming call from an unsaved number that Android passes to Hush, Hush can post a silent question. It skips calls it blocked and calls it cannot reliably track.
 
 **No** saves your choice on the phone and stops future questions for that number. **Yes** adds an exact-number local rule and queues a report to HushDB. The report includes the number as an exact-match pattern and a hashed, app-scoped Android identifier. The report may publish the number in the public rule library once HushDB receives three distinct device IDs across at least two source IPs. These checks limit repeat reports. They do not attest physical devices.
 

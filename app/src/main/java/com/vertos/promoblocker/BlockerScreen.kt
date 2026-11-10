@@ -180,6 +180,9 @@ internal fun BlockerScreen(
                                 }
                             }
                             item("stats") { StatCard("Blocked calls", "Saved on this phone", state.count, Modifier.fillMaxWidth()) }
+                            actions.enableFeedback?.let { enable ->
+                                item("feedback") { AfterCallFeedbackCard(enable) }
+                            }
                         }
                         Destination.SETTINGS -> {
                             item("settings-heading") {
@@ -187,14 +190,8 @@ internal fun BlockerScreen(
                                     fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
                             }
                             item("appearance") { ThemeSelector(state.theme, actions.setTheme) }
-                            item("support") { SupportHush(state.theme.isDark) }
-                            item("feedback") {
-                                Panel {
-                                    SectionTitle("After-call feedback", "Get a silent question after answering an unsaved number. Yes blocks and reports the number to HushDB. Approved reports become public rules. No stops future questions for that number.")
-                                    actions.enableFeedback?.let { enable ->
-                                        FilledTonalButton(onClick = enable) { Text("Allow call feedback") }
-                                    }
-                                }
+                            if (actions.enableFeedback == null) {
+                                item("feedback") { AfterCallFeedbackCard() }
                             }
                             item("notifications") {
                                 Panel {
@@ -205,6 +202,7 @@ internal fun BlockerScreen(
                                     TextButton(onClick = actions.manageNotifications) { Text("Notification settings") }
                                 }
                             }
+                            item("support") { SupportHush(state.theme.isDark) }
                         }
                         Destination.RULES -> {
                             item("rules-heading") { PageHeading("Rules", "Choose which calls to block.") }
@@ -364,6 +362,16 @@ private fun ThemeSelector(selected: AppThemeMode, onSelect: (AppThemeMode) -> Un
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AfterCallFeedbackCard(onEnable: (() -> Unit)? = null) {
+    Panel {
+        SectionTitle("After-call feedback", "Get a silent question after answering an unsaved number. Yes blocks and reports the number to HushDB. Approved reports become public rules. No stops future questions for that number.")
+        if (onEnable != null) {
+            FilledTonalButton(onClick = onEnable) { Text("Allow call feedback") }
         }
     }
 }
@@ -831,7 +839,7 @@ private fun SetupDialog(onDismiss: () -> Unit, onContinue: () -> Unit) {
                 HorizontalDivider()
                 Text("1. Choose Hush in the Android prompt", fontWeight = FontWeight.SemiBold)
                 Text("2. Check Home for “Call blocking is on”", fontWeight = FontWeight.SemiBold)
-                Text("You can turn on after-call feedback later in Settings.", style = MaterialTheme.typography.bodySmall)
+                Text("You can turn on after-call feedback later on Home.", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
                 TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Not now") }
             }
