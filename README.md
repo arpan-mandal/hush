@@ -55,9 +55,7 @@ Hush checks calls on your device. Downloading cloud rules sends no phone numbers
 
 These are ideas for future releases. Feedback and contributions are welcome.
 
-- **Rule import and export** for moving custom patterns between phones.
-- **Search and filters in History** for finding a call or seeing which rules fire most often.
-- **Better checks before enabling a rule** to help people spot overly broad patterns and avoid blocking useful calls.
+- **Wider Support** - Add support for iOS and increase scope of call-blocking beyond just Indian phone numbers.
 
 ## For developers
 
