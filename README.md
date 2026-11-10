@@ -1,51 +1,69 @@
-# Hush
+<h1 align="center">
+  <img src="docs/media/hush-banner.svg" width="100%" alt="Hush. Your phone. Your peace. Open-source call blocking for Android.">
+</h1>
 
-**Your phone. Your peace.**
+<p align="center">
+  <strong><a href="https://github.com/arpan-mandal/hush/releases/latest">Download Hush</a></strong>
+  · <a href="https://hush.arpanm.xyz/">Website</a>
+  · <a href="https://hush.arpanm.xyz/docs">Setup guide</a>
+  · <a href="https://hushdb.arpanm.xyz/rules">Cloud rules</a>
+</p>
 
-Hush blocks unwanted phone calls on Android 10 and up. It comes with rules for India’s 140 sales numbers, and you can add your own. The app keeps the list of blocked calls on your phone.
+<p align="center"><strong>Android 10+</strong> · <strong>Works offline</strong> · <strong>Free and open source</strong></p>
 
-[Download Hush](https://hush.arpanm.xyz/#download) · [Setup guide](https://hush.arpanm.xyz/docs) · [Cloud rules](https://hushdb.arpanm.xyz/rules)
+Hush screens eligible incoming calls before they ring. It comes with rules for India’s 140 sales numbers, lets you add your own, and shows what it declined and why. Your saved rules work offline, and your call history stays on your phone.
 
-## Getting started
+## See Hush in action
 
-1. Download the signed APK from [Releases](https://github.com/arpan-mandal/hush/releases) or the Hush website. Open it on your phone to install.
-2. In Hush, tap **Turn on call blocking** and choose Hush as the caller ID and spam app when Android asks.
-3. Check that Home says **Call blocking is on**. Open **Rules → Display rules** for the local and cloud rule table, or use **Try a number** to see what it would do with a sample number.
+<table>
+  <tr>
+    <th width="33%">Protection at a glance</th>
+    <th width="33%">Try a number</th>
+    <th width="33%">Make it yours</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><img src="docs/media/home.png" width="230" alt="Hush Home with Call blocking turned on and the blocked calls counter"></td>
+    <td align="center" valign="top"><img src="docs/media/number-tester.png" width="230" alt="The number tester shows a sample number would be blocked by a local 140 sales rule"></td>
+    <td align="center" valign="top"><img src="docs/media/settings.png" width="230" alt="Hush Settings in Pure black mode with the app theme and notification controls"></td>
+  </tr>
+</table>
 
-Android lets you choose one caller ID and spam app at a time. Your regular Phone app still makes and answers calls. If you want an alert after a call is blocked, open **Settings → Blocked call alerts**. On Android 13 or newer, grant notification permission there.
+## What you can do
 
-## How the rules work
+| Feature | What it does |
+| --- | --- |
+| **Block sales calls out of the box** | Hush comes with India’s 140 promotional rules. You can also enable filtering for 160 service calls, failed carrier verification, or hidden numbers Android passes to Hush. |
+| **Make rules for your own needs** | Add a regex for a number or range. Try a number before you rely on it, and manage your custom and cloud rules in one table. |
+| **Use community rules offline** | Sync approved patterns from HushDB. Your saved rules work offline, and you can switch cloud rules off individually. |
+| **See what was declined** | History shows the number, time, and blocking reason. You can clear it or turn on quiet Android notifications for blocked calls. |
+| **Give feedback after a call** | If you opt in, Hush can ask about an answered call from an unsaved number. **Yes** blocks that exact number and queues a report. **No** stops future questions for it. |
+| **Choose your look** | Switch between Light, Dark, and Pure black in Settings. |
 
-- **Built-in rules** cover 140 sales calls. You can also turn on filtering for 160 service calls, flagged numbers, or hidden numbers under **What to block**.
-- **Your rules** match the whole phone number. For example, `^0?140\d+$` matches local numbers starting with 140 or 0140, followed by more digits. Check a sample with **Try a number** before relying on a rule.
-- **Cloud rules** come from the public library. Hush saves a copy so your rules work offline. **Check for new rules** downloads updates. The download request sends no phone numbers, call history, or custom rules.
+## Get started
 
-Flagged numbers rely on a result from your phone company, which Android provides starting with Android 11. Android usually keeps saved contacts out of third-party screening and may withhold calls with hidden numbers. Some phones still show blocked calls in the system call log. Hush handles regular phone calls delivered by Android Telecom.
+1. Download the signed APK from [GitHub Releases](https://github.com/arpan-mandal/hush/releases/latest) and open it on your Android phone. The release also includes a SHA-256 checksum.
+2. Open Hush and tap **Turn on call blocking**. Choose Hush in Android’s caller ID and spam prompt.
+3. Confirm Home says **Call blocking is on**. Use **Rules → Try a number** to check how Hush handles a sample.
 
-## After-call feedback
+Android allows one caller ID and spam provider at a time. Your Phone app still handles dialing and answering. Saved contacts, restricted caller IDs, and some call types can bypass third-party screening. Carrier verification requires Android 11 or newer and carrier support. [Installation and troubleshooting](https://hush.arpanm.xyz/docs#install)
 
-Turn on **After-call feedback** on Home and allow phone-state access and notifications. Once enabled, the card moves to Settings. After an answered incoming call from an unsaved number that Android passes to Hush, Hush can post a silent question. It skips calls it blocked and calls it cannot reliably track.
+## Your data
 
-**No** saves your choice on the phone and stops future questions for that number. **Yes** adds an exact-number local rule and queues a report to HushDB. The report includes the number as an exact-match pattern and a hashed, app-scoped Android identifier. The report may publish the number in the public rule library once HushDB receives three distinct device IDs across at least two source IPs. These checks limit repeat reports. They do not attest physical devices.
+Hush checks calls on your device. Downloading cloud rules sends no phone numbers, call history, or custom rules. If you choose **Yes** in after-call feedback, Hush sends an exact-match pattern for that number and a hashed, app-scoped device identifier to HushDB. Approved patterns are public. [Privacy policy](https://hush.arpanm.xyz/privacy)
 
-Hush checks for a new release at startup. If HushDB returns a different version, the app links to the download page.
+## Roadmap ideas
 
-## Build from source
+These are ideas for future releases. Feedback and contributions are welcome.
 
-Use JDK 17 and install Android SDK Platform 35. Android Studio can set the SDK path for you. For command-line builds, set `ANDROID_HOME` or put `sdk.dir=/path/to/sdk` in an untracked `local.properties`.
+- **Rule import and export** for moving custom patterns between phones.
+- **Search and filters in History** for finding a call or seeing which rules fire most often.
+- **Better checks before enabling a rule** to help people spot overly broad patterns and avoid blocking useful calls.
 
-```sh
-git clone https://github.com/arpan-mandal/hush.git
-cd hush
-./gradlew testDebugUnitTest assembleDebug
-```
+## For developers
 
-The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. Unit test results are in `app/build/reports/tests/testDebugUnitTest/`. A local debug build has your own signing key. Android checks the signing key when you install an update over an existing copy.
+Hush is built with Kotlin, Jetpack Compose, Room, DataStore, WorkManager, and RE2/J. The source is available under the [Apache License 2.0](LICENSE).
 
-The project uses Kotlin and Jetpack Compose for the UI, Room for rules and history, DataStore for preferences, and RE2/J for number matching. For the call path and local data details, see [How Hush works](docs/how-it-works.md).
-
-## Contributing
-
-Issues and pull requests are welcome. For a call blocking bug, include your Android version, phone model, Hush version, and the relevant setting. Use a made-up number that matches the same pattern so your phone numbers stay private. Rule submissions for the public library go through [the cloud rules site](https://hushdb.arpanm.xyz/).
-
-Hush’s source code is available under the [Apache License 2.0](LICENSE).
+- [Architecture, build commands, and testing](docs/how-it-works.md)
+- [Report a bug or propose a feature](https://github.com/arpan-mandal/hush/issues)
+- [Suggest a community rule](https://hushdb.arpanm.xyz/)
+- [Support Hush](https://hush.arpanm.xyz/donate)
