@@ -12,7 +12,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         CloudSyncSchedule.onAppOpened(this)
+        (application as PromoApplication).repository.resumeFeedbackReports()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,18 +65,34 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun ConnectedBlockerScreen(repository: BlockerRepository, roleManager: RoleManager?, openHistory: Flow<Unit>) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val version = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
+    var updateVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    var dismissedVersion by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(version) {
+        updateVersion = withContext(Dispatchers.IO) { FeedbackApi.latestVersion() }
+            ?.takeIf { it != version && it != dismissedVersion }
+    }
     fun needsNotificationPermission() = Build.VERSION.SDK_INT >= 33 &&
         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    fun needsPhonePermission() =
+        context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED
     var needsPermission by remember { mutableStateOf(needsNotificationPermission()) }
+    var needsPhone by remember { mutableStateOf(needsPhonePermission()) }
     var roleHeld by remember { mutableStateOf(false) }
     val available = roleManager?.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) == true
     fun refreshRole() { roleHeld = roleManager?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         refreshRole()
         needsPermission = needsNotificationPermission()
+        needsPhone = needsPhonePermission()
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshRole() }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        needsPermission = needsNotificationPermission()
+    }
+    val feedbackPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        needsPhone = needsPhonePermission()
         needsPermission = needsNotificationPermission()
     }
     val settings by repository.settings.collectAsStateWithLifecycle()
@@ -107,6 +129,14 @@ private fun ConnectedBlockerScreen(repository: BlockerRepository, roleManager: R
                 { notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
             } else null,
             manageNotifications = { context.startActivity(BlockedCallNotifications(context).settingsIntent()) },
+            enableFeedback = if (needsPhone || needsPermission) {
+                {
+                    feedbackPermissions.launch(buildList {
+                        if (needsPhone) add(Manifest.permission.READ_PHONE_STATE)
+                        if (needsPermission) add(Manifest.permission.POST_NOTIFICATIONS)
+                    }.toTypedArray())
+                }
+            } else null,
             refreshCloud = {
                 scope.launch {
                     try {
@@ -124,4 +154,14 @@ private fun ConnectedBlockerScreen(repository: BlockerRepository, roleManager: R
             },
         ),
     )
+    updateVersion?.let { latest ->
+        fun dismiss() { dismissedVersion = latest; updateVersion = null }
+        AlertDialog(
+            onDismissRequest = ::dismiss,
+            title = { Text("Update available") },
+            text = { Text("You have Hush $version. Version $latest is available on the Hush website.") },
+            confirmButton = { TextButton(onClick = { dismiss(); uriHandler.openUri("https://hush.arpanm.xyz/#download") }) { Text("Get update") } },
+            dismissButton = { TextButton(onClick = ::dismiss) { Text("Later") } },
+        )
+    }
 }

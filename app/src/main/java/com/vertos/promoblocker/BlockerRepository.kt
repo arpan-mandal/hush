@@ -16,6 +16,8 @@ interface ScreeningRuntime {
     val snapshot: ScreeningSnapshot
     suspend fun awaitReady()
     fun record(number: String?, reason: String)
+    fun beginFeedbackCall(): Long = 0
+    fun trackAllowedCall(number: String?, token: Long) = Unit
 }
 class BlockerRepository internal constructor(
     context: Context,
@@ -27,10 +29,13 @@ class BlockerRepository internal constructor(
         // Never include phone numbers or pattern text in system logs.
         Log.e("PromoBlocker", "Local storage operation failed: ${error.javaClass.simpleName}")
     })
-    private val store = context.applicationContext.settingsStore
+    private val appContext = context.applicationContext
+    private val store = appContext.settingsStore
     private val blockedCallNotifications = BlockedCallNotifications(context.applicationContext)
+    private val feedbackNotifications = CallFeedbackNotifications(appContext)
+    private val feedbackTracker = CallFeedbackTracker()
     private val database = Room.databaseBuilder(context, BlockerDatabase::class.java, "promo-blocker.db")
-        .addMigrations(MIGRATION_1_2).build()
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
     private val dao = database.dao()
     private val ready = CompletableDeferred<Unit>()
     private val ruleLock = Mutex()
@@ -67,10 +72,11 @@ class BlockerRepository internal constructor(
                     val compiled = stored.filter { it.enabled }.map {
                         val reason = when {
                             it.builtIn -> it.id
-                            it.isCloud -> it.description ?: it.expression
+                            it.description != null -> it.description
                             else -> "Custom: ${it.expression}"
                         }
-                        CompiledRule(reason, it.expression, it.transactional)
+                        val normalize = it.id.startsWith("feedback:") || (it.isCloud && it.description == CLOUD_FEEDBACK_DESCRIPTION)
+                        CompiledRule(reason, it.expression, it.transactional, normalize)
                     }
                     ScreeningSnapshot(options, compiled)
                 }.flowOn(Dispatchers.Default).collect {
@@ -116,6 +122,46 @@ class BlockerRepository internal constructor(
     suspend fun toggleRule(id: String, enabled: Boolean) { dao.toggleRule(id, enabled) }
     suspend fun deleteRule(id: String) { dao.deleteRule(id) }
     suspend fun clearHistory() { dao.clearHistory() }
+    override fun beginFeedbackCall(): Long = feedbackTracker.beginCall()
+
+    override fun trackAllowedCall(number: String?, token: Long) {
+        if (feedbackNotifications.available()) feedbackTracker.allowed(number, token)
+    }
+
+    fun phoneStateChanged(state: String): String? = feedbackTracker.stateChanged(state)
+
+    suspend fun promptForFeedback(number: String) {
+        if (!dao.hasFeedback(number)) feedbackNotifications.post(number)
+    }
+
+    suspend fun respondToFeedback(number: String, spam: Boolean) {
+        val rule = if (spam) RegexRuleEntity(
+            id = "feedback:${UUID.randomUUID()}",
+            expression = exactFeedbackRule(number),
+            description = "You reported this number as spam",
+        ) else null
+        if (dao.saveFeedback(number, rule) && spam) CallFeedbackWorker.schedule(appContext)
+        feedbackNotifications.dismiss(number)
+    }
+
+    suspend fun sendPendingFeedback(): Boolean {
+        val device = feedbackDeviceId(appContext) ?: return false
+        while (true) {
+            val batch = dao.pendingFeedback()
+            if (batch.isEmpty()) return true
+            for (number in batch) {
+                if (!FeedbackApi.report(number, device)) return false
+                dao.markFeedbackSent(number)
+            }
+        }
+    }
+
+    fun resumeFeedbackReports() {
+        scope.launch {
+            if (dao.pendingFeedback().isNotEmpty()) CallFeedbackWorker.schedule(appContext)
+        }
+    }
+
     override fun record(number: String?, reason: String) {
         val timestamp = System.currentTimeMillis()
         scope.launch {

@@ -23,8 +23,31 @@ data class RegexRuleEntity(
 ) {
     val isCloud: Boolean get() = id.startsWith("cloud:")
 }
+
+@Entity(tableName = "call_feedback")
+data class CallFeedbackEntity(@PrimaryKey val number: String, val reportPending: Boolean)
+
 @Dao
 interface BlockerDao {
+    @Query("SELECT EXISTS(SELECT 1 FROM call_feedback WHERE number = :number)")
+    suspend fun hasFeedback(number: String): Boolean
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFeedback(feedback: CallFeedbackEntity): Long
+    @Query("SELECT number FROM call_feedback WHERE reportPending = 1 ORDER BY number LIMIT 50")
+    suspend fun pendingFeedback(): List<String>
+    @Query("UPDATE call_feedback SET reportPending = 0 WHERE number = :number")
+    suspend fun markFeedbackSent(number: String)
+    @Query("SELECT id FROM regex_rules WHERE builtIn = 0 AND id NOT LIKE 'cloud:%' AND expression = :expression LIMIT 1")
+    suspend fun localRuleId(expression: String): String?
+    @Transaction
+    suspend fun saveFeedback(number: String, rule: RegexRuleEntity?): Boolean {
+        if (insertFeedback(CallFeedbackEntity(number, rule != null)) == -1L) return false
+        if (rule != null) {
+            val existing = localRuleId(rule.expression)
+            if (existing == null) insertRule(rule) else toggleRule(existing, true)
+        }
+        return true
+    }
     @Query("SELECT * FROM blocked_calls ORDER BY timestamp DESC, id DESC LIMIT 1000")
     fun observeHistory(): Flow<List<BlockedCallEntity>>
     @Query("SELECT COUNT(*) FROM blocked_calls") fun observeCount(): Flow<Int>
@@ -35,7 +58,7 @@ interface BlockerDao {
     @Transaction suspend fun record(call: BlockedCallEntity) { insertBlocked(call); trimHistory() }
     @Query("SELECT * FROM regex_rules ORDER BY builtIn DESC, id ASC")
     fun observeRules(): Flow<List<RegexRuleEntity>>
-    @Query("SELECT COUNT(*) FROM regex_rules WHERE builtIn = 0 AND id NOT LIKE 'cloud:%'") suspend fun customRuleCount(): Int
+    @Query("SELECT COUNT(*) FROM regex_rules WHERE builtIn = 0 AND id NOT LIKE 'cloud:%' AND id NOT LIKE 'feedback:%'") suspend fun customRuleCount(): Int
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun seed(rules: List<RegexRuleEntity>)
     @Insert suspend fun insertRule(rule: RegexRuleEntity)
     @Query("UPDATE regex_rules SET enabled = :enabled WHERE id = :id") suspend fun toggleRule(id: String, enabled: Boolean)
@@ -67,5 +90,10 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("ALTER TABLE regex_rules ADD COLUMN description TEXT")
     }
 }
-@Database(entities = [BlockedCallEntity::class, RegexRuleEntity::class], version = 2, exportSchema = true)
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS call_feedback (number TEXT NOT NULL PRIMARY KEY, reportPending INTEGER NOT NULL)")
+    }
+}
+@Database(entities = [BlockedCallEntity::class, RegexRuleEntity::class, CallFeedbackEntity::class], version = 3, exportSchema = true)
 abstract class BlockerDatabase : RoomDatabase() { abstract fun dao(): BlockerDao }

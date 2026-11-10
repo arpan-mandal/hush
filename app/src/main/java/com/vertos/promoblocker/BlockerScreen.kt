@@ -1,5 +1,6 @@
 package com.vertos.promoblocker
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -9,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -80,10 +82,11 @@ internal data class BlockerActions(
     val refreshCloud: () -> Unit = {},
     val requestNotificationPermission: (() -> Unit)? = null,
     val manageNotifications: () -> Unit = {},
+    val enableFeedback: (() -> Unit)? = null,
 )
 private enum class Destination(val label: String, @DrawableRes val icon: Int) {
     HOME("Home", R.drawable.ic_dashboard), RULES("Rules", R.drawable.ic_rules), HISTORY("History", R.drawable.ic_history),
-    SETTINGS("Settings", R.drawable.ic_settings),
+    SETTINGS("Settings", R.drawable.ic_settings), RULE_TABLE("Display rules", R.drawable.ic_rules),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -95,6 +98,7 @@ internal fun BlockerScreen(
     openHistory: Flow<Unit> = emptyFlow(),
 ) {
     var selected by rememberSaveable { mutableStateOf(Destination.HOME) }
+    BackHandler(selected == Destination.RULE_TABLE) { selected = Destination.RULES }
     LaunchedEffect(openHistory) { openHistory.collect { selected = Destination.HISTORY } }
     var showingTester by rememberSaveable { mutableStateOf(false) }
     var addingRule by rememberSaveable { mutableStateOf(false) }
@@ -104,6 +108,7 @@ internal fun BlockerScreen(
     var showingHelp by rememberSaveable { mutableStateOf(false) }
     val homeScroll = rememberLazyListState()
     val rulesScroll = rememberLazyListState()
+    val tableScroll = rememberLazyListState()
     val historyScroll = rememberLazyListState()
     val settingsScroll = rememberLazyListState()
     val saveableTabs = rememberSaveableStateHolder()
@@ -112,6 +117,7 @@ internal fun BlockerScreen(
     val customRules = remember(state.rules) { state.rules.filter { !it.builtIn && !it.isCloud } }
     val builtInRules = remember(state.rules) { state.rules.filter { it.builtIn } }
     val cloudRules = remember(state.rules) { state.rules.filter { it.isCloud } }
+    val tableRules = remember(customRules, cloudRules) { customRules + cloudRules }
     val historyGroups = remember(state.history) {
         val zone = ZoneId.systemDefault()
         state.history.groupBy { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
@@ -125,6 +131,9 @@ internal fun BlockerScreen(
                     .padding(horizontal = 24.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (selected == Destination.RULE_TABLE) {
+                    TextButton(onClick = { selected = Destination.RULES }) { Text("‹ Back") }
+                }
                 Image(painterResource(R.drawable.hush_icon), contentDescription = null,
                     modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)))
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
@@ -134,8 +143,8 @@ internal fun BlockerScreen(
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = colors.surface, tonalElevation = 0.dp) {
-                Destination.entries.forEach { destination ->
+            if (selected != Destination.RULE_TABLE) NavigationBar(containerColor = colors.surface, tonalElevation = 0.dp) {
+                Destination.entries.filter { it != Destination.RULE_TABLE }.forEach { destination ->
                     NavigationBarItem(
                         selected = selected == destination, onClick = { selected = destination },
                         icon = { Icon(painterResource(destination.icon), contentDescription = null) },
@@ -154,6 +163,7 @@ internal fun BlockerScreen(
                         Destination.RULES -> rulesScroll
                         Destination.HISTORY -> historyScroll
                         Destination.SETTINGS -> settingsScroll
+                        Destination.RULE_TABLE -> tableScroll
                     },
                     modifier = Modifier.widthIn(max = 680.dp).fillMaxSize(),
                     contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp),
@@ -178,6 +188,14 @@ internal fun BlockerScreen(
                             }
                             item("appearance") { ThemeSelector(state.theme, actions.setTheme) }
                             item("support") { SupportHush(state.theme.isDark) }
+                            item("feedback") {
+                                Panel {
+                                    SectionTitle("After-call feedback", "Get a silent question after answering an unsaved number. Yes blocks and reports the number to HushDB. Approved reports become public rules. No stops future questions for that number.")
+                                    actions.enableFeedback?.let { enable ->
+                                        FilledTonalButton(onClick = enable) { Text("Allow call feedback") }
+                                    }
+                                }
+                            }
                             item("notifications") {
                                 Panel {
                                     SectionTitle("Blocked call alerts", "Get a silent notification when Hush blocks a call.")
@@ -211,23 +229,14 @@ internal fun BlockerScreen(
                                         onChange = { actions.setFlag("transactional", it) })
                                 }
                             }
-                            item("custom-heading") {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Box(Modifier.weight(1f)) { SectionHeading("Your rules", "Block numbers using your own patterns.") }
-                                    FilledTonalButton(onClick = { addingRule = true }) {
-                                        Icon(painterResource(R.drawable.ic_plus), null, modifier = Modifier.size(18.dp))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text("Add rule")
+                            item("manage-rules") {
+                                Panel {
+                                    SectionTitle("Local and cloud rules", "${customRules.size} local · ${cloudRules.size} cloud")
+                                    FilledTonalButton(onClick = { selected = Destination.RULE_TABLE }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Display rules")
                                     }
+                                    TextButton(onClick = { addingRule = true }) { Text("Add rule") }
                                 }
-                            }
-                            if (customRules.isEmpty()) item("empty-rules") {
-                                EmptyCard(R.drawable.ic_rules, "No rules yet", "Add a rule to block numbers that start the same way.")
-                            }
-                            items(customRules, key = { it.id }) { rule ->
-                                RuleCard(rule, state.settings.blockTransactional, state.initialized,
-                                    onToggle = { actions.toggleRule(rule.id, it) }, onDelete = { deletingRule = rule })
                             }
                             item("help") { TextButton(onClick = { showingHelp = true }) {
                                 Icon(painterResource(R.drawable.ic_info), null, modifier = Modifier.size(18.dp))
@@ -247,17 +256,24 @@ internal fun BlockerScreen(
                                     }
                                 }
                             }
-                            if (cloudRules.isEmpty()) item("empty-cloud") {
-                                InfoNotice("No cloud rules saved yet. Check for new rules to get them.")
-                            }
-                            items(cloudRules, key = { it.id }, contentType = { "rule" }) { rule ->
-                                RuleCard(rule, state.settings.blockTransactional, state.initialized,
-                                    onToggle = { actions.toggleRule(rule.id, it) }, onDelete = null)
-                            }
                             item("builtin-heading") { SectionHeading("Built-in rules", "140 sales calls and 160 service calls") }
                             items(builtInRules, key = { it.id }, contentType = { "rule" }) { rule ->
                                 RuleCard(rule, state.settings.blockTransactional, state.initialized,
                                     onToggle = { actions.toggleRule(rule.id, it) }, onDelete = null)
+                            }
+                        }
+                        Destination.RULE_TABLE -> {
+                            item("table-heading") {
+                                PageHeading("Local and cloud rules", "Tap ON or OFF to change a rule. Tap a local regex to remove it.")
+                                TextButton(onClick = { addingRule = true }) { Text("Add rule") }
+                            }
+                            item("table-columns") { RuleTableColumns() }
+                            if (tableRules.isEmpty()) item("empty-table") {
+                                InfoNotice("No rules yet. Add a rule or check for cloud rules.")
+                            }
+                            items(tableRules.size, key = { tableRules[it].id }) { index ->
+                                val rule = tableRules[index]
+                                RuleTableRow(index + 1, rule, state.initialized, actions.toggleRule) { deletingRule = rule }
                             }
                         }
                         Destination.HISTORY -> {
@@ -298,10 +314,9 @@ internal fun BlockerScreen(
         title = "Clear your history?", message = "This deletes your list of blocked calls from this phone.",
         confirmLabel = "Clear history", onDismiss = { clearing = false }, onConfirm = { clearing = false; actions.clearHistory() },
     )
-    if (requestingRole) ConfirmDialog(
-        title = "Turn on call blocking?",
-        message = "Android lets you choose one caller ID and spam app. Pick Hush to replace your current choice and let Hush block calls. You’ll still make and answer calls in your Phone app.",
-        confirmLabel = "Continue", onDismiss = { requestingRole = false }, onConfirm = { requestingRole = false; actions.requestRole() },
+    if (requestingRole) SetupDialog(
+        onDismiss = { requestingRole = false },
+        onContinue = { requestingRole = false; actions.requestRole() },
     )
     if (showingHelp) AlertDialog(
         onDismissRequest = { showingHelp = false }, title = { Text("How rules work") },
@@ -722,7 +737,7 @@ private fun HistoryCard(call: BlockedCallEntity) {
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SelectionContainer { Text(call.number ?: "Hidden or unknown number", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
-                Text(callReasonLabel(call.reason), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                Text("Reason · " + callReasonLabel(call.reason), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 Text(remember(call.timestamp) { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(call.timestamp)) },
                     style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
             }
@@ -736,6 +751,7 @@ private fun callReasonLabel(reason: String): String = when (reason) {
     DefaultRules.SERVICE_WITHOUT_COUNTRY_CODE -> "160 service calls (without country code)"
     NumberEvaluator.SPOOFED -> "Flagged by your phone company"
     NumberEvaluator.UNKNOWN -> "Hidden or unknown number"
+    CLOUD_FEEDBACK_DESCRIPTION -> "Reported by the Hush community"
     else -> reason
 }
 
@@ -749,4 +765,76 @@ private fun ConfirmDialog(title: String, message: String, confirmLabel: String, 
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message, modifier = Modifier.verticalScroll(rememberScrollState())) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+}
+
+@Composable
+private fun RuleTableColumns() {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("SL No.", Modifier.width(44.dp), style = MaterialTheme.typography.labelSmall)
+        Text("Regex", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+        Text("Description", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+        Text("Status", Modifier.width(52.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun RuleTableRow(
+    index: Int,
+    rule: RegexRuleEntity,
+    initialized: Boolean,
+    onToggle: (String, Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(shape = MaterialTheme.shapes.small, color = colors.surface) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(index.toString(), Modifier.width(44.dp), style = MaterialTheme.typography.bodySmall)
+            Column(Modifier.weight(1f).padding(vertical = 8.dp, horizontal = 2.dp)) {
+                if (rule.isCloud) {
+                    SelectionContainer { Text(rule.expression, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
+                } else {
+                    Text(
+                        rule.expression,
+                        Modifier.clickable(onClickLabel = "Remove local rule", onClick = onDelete),
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Text(rule.description ?: "Local rule", Modifier.weight(1f).padding(4.dp), style = MaterialTheme.typography.bodySmall)
+            Box(
+                Modifier.width(52.dp).heightIn(min = 48.dp).toggleable(
+                    value = rule.enabled, enabled = initialized, role = Role.Switch,
+                    onValueChange = { onToggle(rule.id, it) },
+                ).semantics { contentDescription = "Status for rule ${rule.expression}" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(if (rule.enabled) "ON" else "OFF", color = if (rule.enabled) colors.primary else colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupDialog(onDismiss: () -> Unit, onContinue: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surface) {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Image(painterResource(R.drawable.hush_icon), null, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
+                Text("Set up Hush", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Android lets you choose one caller ID and spam app. Your Phone app still makes and answers calls.",
+                    style = MaterialTheme.typography.bodyMedium)
+                HorizontalDivider()
+                Text("1. Choose Hush in the Android prompt", fontWeight = FontWeight.SemiBold)
+                Text("2. Check Home for “Call blocking is on”", fontWeight = FontWeight.SemiBold)
+                Text("You can turn on after-call feedback later in Settings.", style = MaterialTheme.typography.bodySmall)
+                Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Not now") }
+            }
+        }
+    }
 }

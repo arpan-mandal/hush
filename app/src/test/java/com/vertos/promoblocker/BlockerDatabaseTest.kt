@@ -14,6 +14,25 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
 class BlockerDatabaseTest {
+    @Test fun feedbackPersistsNoAndQueuesOnlyTheFirstYes() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), BlockerDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = db.dao()
+            val number = "+919876543210"
+            val rule = RegexRuleEntity("feedback:test", exactFeedbackRule(number))
+            assertTrue(dao.saveFeedback("1401234567", null))
+            assertTrue(dao.hasFeedback("1401234567"))
+            assertFalse(dao.saveFeedback("1401234567", rule))
+            assertTrue(dao.saveFeedback(number, rule))
+            assertFalse(dao.saveFeedback(number, rule))
+            assertEquals(listOf(number), dao.pendingFeedback())
+            assertEquals(rule, dao.observeRules().first().single())
+            dao.markFeedbackSent(number)
+            assertTrue(dao.pendingFeedback().isEmpty())
+            assertTrue(dao.hasFeedback(number))
+        } finally { db.close() }
+    }
     @Test fun blockedCallsAreOrderedCountedAndCleared() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), BlockerDatabase::class.java).allowMainThreadQueries().build()
         try {

@@ -27,7 +27,12 @@ class BlockerScreenTest {
 
     private lateinit var hostView: View
 
-    private fun showScreen(roleHeld: Boolean = true, initialTheme: AppThemeMode = AppThemeMode.LIGHT, onRoleRequest: () -> Unit = {}) {
+    private fun showScreen(
+        roleHeld: Boolean = true,
+        initialTheme: AppThemeMode = AppThemeMode.LIGHT,
+        extraRules: List<RegexRuleEntity> = emptyList(),
+        onRoleRequest: () -> Unit = {},
+    ) {
         compose.setContent {
             hostView = LocalView.current
             var theme by remember { mutableStateOf(initialTheme) }
@@ -36,7 +41,7 @@ class BlockerScreenTest {
                 RegexRuleEntity(it.id, it.expression, builtIn = true, transactional = it.transactional)
             }
             val state = BlockerUiState(
-                settings = settings, rules = fixtureRules, history = emptyList(), count = 0,
+                settings = settings, rules = fixtureRules + extraRules, history = emptyList(), count = 0,
                 storageError = null, initialized = true, roleHeld = roleHeld, roleAvailable = true, theme = theme,
             )
             PromoTheme(theme) {
@@ -90,6 +95,23 @@ class BlockerScreenTest {
         compose.onNodeWithText("Pure black").performClick()
         compose.onNode(hasText("Pure black") and isSelected()).assertIsDisplayed()
         compose.onNodeWithText("Light").performClick().assertIsDisplayed()
+    }
+    @Test fun displayRulesOpensASeparateTableWithoutBuiltInRules() {
+        showScreen(extraRules = listOf(
+            RegexRuleEntity("local-test", "^1234567$"),
+            RegexRuleEntity("cloud:42", "^2345678$", enabled = false, description = "Community test"),
+        ))
+        compose.onNodeWithText("Rules", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("^1234567$").assertDoesNotExist()
+        compose.onNodeWithText("Display rules").performClick()
+        compose.onNodeWithText("Regex").assertIsDisplayed()
+        compose.onNodeWithText("^1234567$").assertIsDisplayed()
+        compose.onNodeWithText("Community test").assertIsDisplayed()
+        compose.onNodeWithText("ON").assertIsDisplayed()
+        compose.onNodeWithText("OFF").assertIsDisplayed()
+        compose.onNodeWithText("Built-in rules").assertDoesNotExist()
+        compose.onNodeWithText("‹ Back").performClick()
+        compose.onNodeWithText("What to block").assertIsDisplayed()
     }
     @Test fun testerShowsActualRuleOutcomeAndClearsStaleResults() {
         showScreen(initialTheme = AppThemeMode.DARK_OLED)

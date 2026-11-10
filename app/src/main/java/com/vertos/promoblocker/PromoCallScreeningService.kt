@@ -20,18 +20,22 @@ open class PromoCallScreeningService : CallScreeningService() {
         respondToCall(details, response)
     }
     override fun onScreenCall(callDetails: Call.Details) {
+        val feedbackToken = runtime.beginFeedbackCall()
         if (callDetails.callDirection != Call.Details.DIRECTION_INCOMING) {
             dispatchResponse(callDetails, ALLOW)
             return
         }
         val responded = AtomicBoolean(false)
         val fallback = Runnable {
-            if (responded.compareAndSet(false, true)) dispatchResponse(callDetails, ALLOW)
+            if (responded.compareAndSet(false, true)) {
+                dispatchResponse(callDetails, ALLOW)
+                runtime.trackAllowedCall(telephoneNumber(callDetails), feedbackToken)
+            }
         }
         // Fail open when a cold start or worker saturation exceeds the local target budget.
         handler.postDelayed(fallback, 40)
         scope.launch {
-            val number = callDetails.handle?.takeIf { it.scheme == "tel" }?.schemeSpecificPart
+            val number = telephoneNumber(callDetails)
             val failed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
                 callDetails.callerNumberVerificationStatus == Connection.VERIFICATION_STATUS_FAILED
             val reason = withTimeoutOrNull(30) {
@@ -42,9 +46,12 @@ open class PromoCallScreeningService : CallScreeningService() {
                 handler.removeCallbacks(fallback)
                 dispatchResponse(callDetails, if (reason == null) ALLOW else BLOCK)
                 if (reason != null) runtime.record(number, reason)
+                else runtime.trackAllowedCall(number, feedbackToken)
             }
         }
     }
+    private fun telephoneNumber(details: Call.Details): String? =
+        details.handle?.takeIf { it.scheme == "tel" }?.schemeSpecificPart
     override fun onDestroy() {
         // Pending watchdogs remain queued so every accepted callback receives a response.
         scope.cancel()

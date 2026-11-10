@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <application android:name=".PromoApplication" android:allowBackup="false" android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -19,5 +20,10 @@
             android:permission="android.permission.BIND_SCREENING_SERVICE">
             <intent-filter><action android:name="android.telecom.CallScreeningService" /></intent-filter>
         </service>
+        <receiver android:name=".CallFeedbackReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

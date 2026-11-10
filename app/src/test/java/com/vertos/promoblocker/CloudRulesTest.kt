@@ -33,7 +33,7 @@ class CloudRulesTest {
             old.version = 1
         }
         val db = Room.databaseBuilder(context, BlockerDatabase::class.java, file.name)
-            .addMigrations(MIGRATION_1_2).build()
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         try {
             val rule = db.dao().observeRules().first().single()
             assertEquals("^123$", rule.expression)

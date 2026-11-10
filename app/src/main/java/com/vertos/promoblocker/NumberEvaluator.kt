@@ -5,7 +5,12 @@ import com.google.re2j.PatternSyntaxException
 
 // RE2/J prevents catastrophic backtracking in user patterns. No compilation or storage I/O
 // occurs in evaluate(). Reused matchers are isolated to each evaluation thread.
-class CompiledRule(val id: String, val expression: String, val transactional: Boolean = false) {
+class CompiledRule(
+    val id: String,
+    val expression: String,
+    val transactional: Boolean = false,
+    val normalizePhoneNumber: Boolean = false,
+) {
     private val pattern = Pattern.compile(expression)
     private val matcher = ThreadLocal.withInitial { pattern.matcher("") }
     fun matches(number: String): Boolean {
@@ -60,10 +65,21 @@ object NumberEvaluator {
         if (number.isNullOrBlank()) return if (settings.blockUnknown) UNKNOWN else null
         if (number.length > MAX_NUMBER_LENGTH) return null
         val rules = snapshot.rules
+        var normalized: String? = null
+        var normalizationAttempted = false
         var index = 0
         while (index < rules.size) {
             val rule = rules[index++]
-            if ((!rule.transactional || settings.blockTransactional) && rule.matches(number)) return rule.id
+            if (rule.transactional && !settings.blockTransactional) continue
+            if (!rule.normalizePhoneNumber) {
+                if (rule.matches(number)) return rule.id
+                continue
+            }
+            if (!normalizationAttempted) {
+                normalized = feedbackNumber(number)
+                normalizationAttempted = true
+            }
+            if (normalized != null && rule.matches(normalized)) return rule.id
         }
         return null
     }
